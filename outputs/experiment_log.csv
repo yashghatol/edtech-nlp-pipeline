@@ -1,0 +1,3 @@
+experiment_id,date,model,stage,hypothesis,change_made,metric_before,metric_after,verdict,notes
+PII-000,YYYY-MM-DD,distilbert-base-uncased,stage1_pii,Establish baseline with default HF Trainer settings,Initial training run — no changes,baseline,TBD,TBD,Fill in after first training run
+ESSAY-000,YYYY-MM-DD,deberta-v3-small,stage2_essay,Establish baseline regression head with MSE loss,Initial training run — no changes,baseline,TBD,TBD,Fill in after first training run
