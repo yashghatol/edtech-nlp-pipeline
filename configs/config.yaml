@@ -75,13 +75,9 @@ stage1_pii:
 
 # ── Stage 2: Essay Scoring ────────────────────────────────────────────────────
 stage2_essay:
-
   model:
-    # Start: deberta-v3-small (~180MB, safe on T4 with batch_size=8 + grad accum)
-    # Upgrade to: deberta-v3-base (~180MB → ~375MB) only if small plateaus AND VRAM permits
-    # Check VRAM during run: import torch; torch.cuda.memory_allocated()/1e9
-    pretrained_model:   "microsoft/deberta-v3-small"
-    max_length:         1024
+    pretrained_model:   "microsoft/deberta-v3-base"
+    max_length:         512
     pooling_strategy:   "mean"          # Mean pool over last hidden state
     # Head type options:
     #   regression     → MSELoss, output is float → round to 1–6 at inference
@@ -92,11 +88,16 @@ stage2_essay:
     head_type:          "regression"
     num_labels:         1              # 1 output neuron for regression
     dropout:            0.1
+  
+  paths:
+  train_path: "data/raw/essay/train.csv"
+  test_path: "data/raw/essay/test.csv"
+  output_dir: "outputs/models/essay"
 
   training:
-    epochs:                        5
+    epochs:                        4
     batch_size:                    8
-    learning_rate:                 1.0e-5
+    learning_rate:                 2.0e-5
     warmup_ratio:                  0.1
     weight_decay:                  0.01
     fp16:                          true
@@ -175,3 +176,17 @@ shap:
 
 # ── Global Seed ──────────────────────────────────────────────────────────────
 seed: 42
+stage2:
+  model_name: "microsoft/deberta-v3-base"
+  max_length: 512
+  batch_size: 8
+  epochs: 4
+  lr: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  dropout: 0.1
+  n_folds: 5
+  seed: 42
+  train_path: "../data/raw/essay/train.csv"
+  test_path: "../data/raw/essay/test.csv"
+  output_dir: "../outputs/models/essay"
