@@ -94,7 +94,9 @@ def run_cv(config_path: str = "configs/config.yaml"):
 
         model = EssayScorer(cfg["model_name"], cfg["dropout"])
         model.to(device)
-        model.backbone.gradient_checkpointing_enable()  # saves ~30% VRAM
+        model.backbone.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
 
         optimizer = AdamW(
             model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"]
