@@ -187,6 +187,6 @@ stage2:
   dropout: 0.1
   n_folds: 5
   seed: 42
-  train_path: "../data/raw/essay/train.csv"
-  test_path: "../data/raw/essay/test.csv"
-  output_dir: "../outputs/models/essay"
+  train_path: "/data/raw/essay/train.csv"
+  test_path: "/data/raw/essay/test.csv"
+  output_dir: "/outputs/models/essay"
