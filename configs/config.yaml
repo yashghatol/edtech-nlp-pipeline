@@ -1,192 +1,124 @@
-# =============================================================================
-# EdTech NLP Pipeline — Master Config
-# All hyperparameters live here. No magic numbers in src/ or notebooks.
-# =============================================================================
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
+experiment_tracking:
+  columns:
+  - experiment_id
+  - date
+  - model
+  - stage
+  - hypothesis
+  - change_made
+  - metric_before
+  - metric_after
+  - verdict
+  - notes
+  log_file: outputs/experiment_log.csv
 paths:
   data:
-    raw_pii:          "data/raw/pii/"
-    raw_essay:        "data/raw/essay/"
-    processed_pii:    "data/processed/pii/"
-    processed_essay:  "data/processed/essay/"
-    redacted_essays:  "data/redacted/"         # Output of Stage 1; input to Stage 2 at inference
+    processed_essay: data/processed/essay/
+    processed_pii: data/processed/pii/
+    raw_essay: data/raw/essay/
+    raw_pii: data/raw/pii/
+    redacted_essays: data/redacted/
   outputs:
-    models_pii:       "outputs/models/pii/"
-    models_essay:     "outputs/models/essay/"
-    plots_pii:        "outputs/plots/pii/"
-    plots_essay:      "outputs/plots/essay/"
-    plots_shap:       "outputs/plots/shap/"
-    experiment_log:   "outputs/experiment_log.csv"
-
-# ── Stage 1: PII Detection ────────────────────────────────────────────────────
-stage1_pii:
-
-  model:
-    # Start: distilbert-base-uncased (fast, ~260MB, fits T4 with batch_size=16)
-    # Upgrade to: bert-base-uncased if F1 plateaus and you have time in Phase 1
-    pretrained_model:  "distilbert-base-uncased"
-    max_length:        512
-    stride:            128             # Sliding window overlap for long essays
-    num_labels:        15              # 7 entity types × 2 (B/I) + 1 (O)
-
-    # BIO label mapping — NEVER change order after first training run
-    label2id:
-      "O":                  0
-      "B-NAME_STUDENT":     1
-      "I-NAME_STUDENT":     2
-      "B-EMAIL":            3
-      "I-EMAIL":            4
-      "B-USERNAME":         5
-      "I-USERNAME":         6
-      "B-ID_NUM":           7
-      "I-ID_NUM":           8
-      "B-PHONE_NUM":        9
-      "I-PHONE_NUM":        10
-      "B-URL_PERSONAL":     11
-      "I-URL_PERSONAL":     12
-      "B-STREET_ADDRESS":   13
-      "I-STREET_ADDRESS":   14
-
-  training:
-    epochs:                        3
-    batch_size:                    16
-    learning_rate:                 2.0e-5
-    warmup_ratio:                  0.1        # 10% of steps used for LR warmup
-    weight_decay:                  0.01
-    fp16:                          true       # Mixed precision — requires CUDA
-    gradient_accumulation_steps:   2          # Effective batch = 16×2 = 32
-    eval_strategy:                 "epoch"
-    save_strategy:                 "epoch"
-    load_best_model_at_end:        true
-    metric_for_best_model:         "f1"       # Entity-level F1 from seqeval
-    greater_is_better:             true
-
-  data:
-    train_split:  0.85
-    val_split:    0.15
-    seed:         42
-
-  threshold:
-    # IMPORTANT: missing PII (false negative) is worse than over-flagging (false positive)
-    # Lowering threshold boosts recall at cost of precision — correct tradeoff for PII
-    default:           0.5
-    recall_optimized:  0.3    # Use this at inference; tune on val set in Phase 1
-
-# ── Stage 2: Essay Scoring ────────────────────────────────────────────────────
+    experiment_log: outputs/experiment_log.csv
+    models_essay: outputs/models/essay/
+    models_pii: outputs/models/pii/
+    plots_essay: outputs/plots/essay/
+    plots_pii: outputs/plots/pii/
+    plots_shap: outputs/plots/shap/
+pipeline:
+  distribution_shift_strategy: inference_only
+  pii_confidence_threshold: 0.5
+  redaction_token: '[REDACTED]'
+seed: 42
+shap:
+  batch_size: 16
+  max_evals: 500
+  method: partition
+  n_essays_summary: 50
+  output_plots:
+    html: outputs/plots/shap/shap_essay_highlight.html
+    summary: outputs/plots/shap/shap_summary.png
+    waterfall: outputs/plots/shap/shap_waterfall_sample.png
+stage1:
+  batch_size: 8
+  class_weight_cap: 50.0
+  dropout: 0.1
+  entity_floors:
+    B-ID_NUM: 0.55
+    B-NAME_STUDENT: 0.55
+    B-URL_PERSONAL: 0.8
+    B-USERNAME: 0.9
+    I-ID_NUM: 0.55
+    I-NAME_STUDENT: 0.55
+    I-URL_PERSONAL: 0.8
+    I-USERNAME: 0.9
+  external_records_path: data/raw/pii/external_records.json
+  inference_threshold: 0.5
+  learning_rate: 2.0e-05
+  max_external_records: 5000
+  max_grad_norm: 1.0
+  max_length: 512
+  model_name: microsoft/deberta-v3-base
+  model_save_dir: outputs/models/pii
+  num_epochs: 5
+  num_labels: 13
+  random_state: 42
+  train_path: data/raw/pii/train.json
+  val_fraction: 0.2
+  warmup_fraction: 0.1
+stage2:
+  batch_size: 8
+  dropout: 0.1
+  epochs: 3
+  lr: 2.0e-05
+  max_length: 512
+  model_name: microsoft/deberta-v3-base
+  n_folds: 5
+  output_dir: outputs/models/essay
+  seed: 42
+  test_path: data/raw/essay/test.csv
+  train_path: data/raw/essay/train.csv
+  warmup_ratio: 0.1
+  weight_decay: 0.01
 stage2_essay:
-  model:
-    pretrained_model:   "microsoft/deberta-v3-base"
-    max_length:         512
-    pooling_strategy:   "mean"          # Mean pool over last hidden state
-    # Head type options:
-    #   regression     → MSELoss, output is float → round to 1–6 at inference
-    #   classification → CrossEntropyLoss, 6 classes (risky: treats scores as unordered)
-    #   ordinal        → Ordinal CrossEntropy, preserves score ordering
-    # RECOMMENDATION: Start with regression. It's simplest, works well, and QWK
-    # is still your eval metric regardless of loss function.
-    head_type:          "regression"
-    num_labels:         1              # 1 output neuron for regression
-    dropout:            0.1
-  
-  paths:
-  train_path: "data/raw/essay/train.csv"
-  test_path: "data/raw/essay/test.csv"
-  output_dir: "outputs/models/essay"
-
-  training:
-    epochs:                        3
-    batch_size:                    8
-    learning_rate:                 2.0e-5
-    warmup_ratio:                  0.1
-    weight_decay:                  0.01
-    fp16:                          true
-    gradient_accumulation_steps:   4          # Effective batch = 8×4 = 32
-    eval_strategy:                 "epoch"
-    save_strategy:                 "epoch"
-    load_best_model_at_end:        true
-    metric_for_best_model:         "qwk"      # Quadratic Weighted Kappa — competition metric
-    greater_is_better:             true
-
   data:
-    n_folds:        5
-    # stratified: ensures each fold has same score distribution — correct choice
-    # group: would be correct if essays came from distinct groups (they don't here)
-    fold_strategy:  "stratified"
-    seed:           42
-
-  loss:
-    # mse: simplest, works well with regression head
-    # huber: less sensitive to score outliers (1 or 6 are rare — try this in Phase 2)
-    type:  "mse"
-
-  score_range:
-    min: 1
-    max: 6
-
+    fold_strategy: stratified
+    n_folds: 5
+    seed: 42
   handcrafted_features:
-    # Start with enabled: false — add only if DeBERTa alone underperforms
     enabled: false
     features:
-      - "flesch_kincaid_grade"
-      - "type_token_ratio"
-      - "avg_sentence_length"
-      - "discourse_marker_count"
-      - "avg_word_length"
-
-# ── Pipeline Integration ──────────────────────────────────────────────────────
-pipeline:
-  # Distribution shift strategy when Stage 1 output feeds Stage 2:
-  #   inference_only:    Train Stage 2 on raw essays; connect stages only at inference
-  #                      → Document shift as limitation. Fastest. Use for Phase 3.
-  #   train_on_redacted: Generate OOF redacted essays from Stage 1, train Stage 2 on those
-  #                      → Correct but requires Stage 1 to be fully done first
-  #   augmentation:      Mix 50/50 raw + redacted during Stage 2 training
-  distribution_shift_strategy:  "inference_only"
-
-  pii_confidence_threshold:  0.5    # Min token probability to flag as PII
-  redaction_token:            "[REDACTED]"
-
-# ── Experiment Tracking ───────────────────────────────────────────────────────
-experiment_tracking:
-  log_file: "outputs/experiment_log.csv"
-  columns:
-    - "experiment_id"   # e.g. PII-001, ESSAY-003
-    - "date"            # YYYY-MM-DD
-    - "model"           # pretrained model name
-    - "stage"           # stage1_pii | stage2_essay | pipeline
-    - "hypothesis"      # Why you made this change (one sentence)
-    - "change_made"     # What you actually changed
-    - "metric_before"   # Score before change (or "baseline" for first run)
-    - "metric_after"    # Score after change
-    - "verdict"         # improved | regressed | neutral
-    - "notes"           # Anything else worth recording
-
-# ── SHAP / Interpretability ───────────────────────────────────────────────────
-shap:
-  # For essay scorer (Stage 2)
-  method:          "partition"     # PartitionExplainer — correct for transformer inputs
-  max_evals:       500             # Higher = more accurate but slower; 500 is a good start
-  batch_size:      16
-  n_essays_summary: 50            # Number of val essays to include in summary plot
-  output_plots:
-    summary:    "outputs/plots/shap/shap_summary.png"
-    waterfall:  "outputs/plots/shap/shap_waterfall_sample.png"
-    html:       "outputs/plots/shap/shap_essay_highlight.html"   # For Streamlit embed
-
-# ── Global Seed ──────────────────────────────────────────────────────────────
-seed: 42
-stage2:
-  model_name: "microsoft/deberta-v3-base"
-  max_length: 512
-  batch_size: 8
-  epochs: 3
-  lr: 2.0e-5
-  weight_decay: 0.01
-  warmup_ratio: 0.1
-  dropout: 0.1
-  n_folds: 5
-  seed: 42
-  train_path: "data/raw/essay/train.csv"
-  test_path: "data/raw/essay/test.csv"
-  output_dir: "outputs/models/essay"
+    - flesch_kincaid_grade
+    - type_token_ratio
+    - avg_sentence_length
+    - discourse_marker_count
+    - avg_word_length
+  loss:
+    type: mse
+  model:
+    dropout: 0.1
+    head_type: regression
+    max_length: 512
+    num_labels: 1
+    pooling_strategy: mean
+    pretrained_model: microsoft/deberta-v3-base
+  output_dir: outputs/models/essay
+  paths: null
+  score_range:
+    max: 6
+    min: 1
+  test_path: data/raw/essay/test.csv
+  train_path: data/raw/essay/train.csv
+  training:
+    batch_size: 8
+    epochs: 3
+    eval_strategy: epoch
+    fp16: true
+    gradient_accumulation_steps: 4
+    greater_is_better: true
+    learning_rate: 2.0e-05
+    load_best_model_at_end: true
+    metric_for_best_model: qwk
+    save_strategy: epoch
+    warmup_ratio: 0.1
+    weight_decay: 0.01

@@ -1,4 +1,11 @@
-experiment_id,date,model,stage,hypothesis,change_made,metric_before,metric_after,verdict,notes
-PII-000,YYYY-MM-DD,distilbert-base-uncased,stage1_pii,Establish baseline with default HF Trainer settings,Initial training run — no changes,baseline,TBD,TBD,Fill in after first training run
-ESSAY-000,YYYY-MM-DD,deberta-v3-small,stage2_essay,Establish baseline regression head with MSE loss,Initial training run — no changes,baseline,TBD,TBD,Fill in after first training run
-exp_004,2026-05-19,deberta-v3-base,stage2,5-fold stratified CV complete � all folds,"fp16=True, batch_size=16 (folds 2-3) / 8 (folds 4-5), epochs=3, lr=2e-5",0.8074,0.7926,BEST,"fold QWKs: [0.765, 0.8072, 0.7904, 0.7915, 0.8091]"
+﻿experiment_id,date,model,stage,hypothesis,change_made,metric_before,metric_after,verdict,notes
+PII-000,YYYY-MM-DD,distilbert-base-uncased,stage1_pii,Establish baseline with default HF Trainer settings,Initial training run ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¬ÃÂ¢ÃÂÃÂ no changes,baseline,TBD,TBD,Fill in after first training run
+ESSAY-000,YYYY-MM-DD,deberta-v3-small,stage2_essay,Establish baseline regression head with MSE loss,Initial training run ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¬ÃÂ¢ÃÂÃÂ no changes,baseline,TBD,TBD,Fill in after first training run
+exp_006,06-06-2026,microsoft/deberta-v3-base,stage1_pii,Entity floor sweep to fix URL/USERNAME over-firing,"entity_floors applied: {'B-ID_NUM': 0.55, 'B-NAME_STUDENT': 0.55, 'B-URL_PERSONAL': 0.8, 'B-USERNAME': 0.9, 'I-ID_NUM': 0.55, 'I-NAME_STUDENT': 0.55, 'I-URL_PERSONAL': 0.8, 'I-USERNAME': 0.9}",F1=0.8986  P=0.8391  R=0.9673,F1=0.9048  P=0.8498  R=0.9673,improvement,Best floors from sweep. val=1361 docs (competition only). No retrain — inference-time fix only.
+exp_005,06-06-2026,microsoft/deberta-v3-base,stage1_pii,Add AI4Privacy external data to boost rare label coverage,"+3998 AI4Privacy records. Caps: URL=1x, USERNAME=3x, NAME removed entirely.",N/A (pre-training),external_records=3998,data_prep,"rare_labels_targeted=STREET_ADDRESS,PHONE_NUM,USERNAME,URL_PERSONAL,ID_NUM. Leakage check: overlap=0."
+exp_004,06-06-2026,microsoft/deberta-v3-base,stage1_pii,"Baseline DeBERTa-v3-base, 13 labels, log-scaled weights, +external data",First full run with augmented training set,,entity_f1=0.8986,baseline,"train=9444 docs (competition=5446 + external=3998), val=1361 docs (competition only), max_length=512, epochs=5, batch_size=8"
+"ESSAY-001,2024-XX-XX,deberta-v3-base,stage2,5-fold CV fold 1,fp32 4 epochs T4,—,QWK=0.7650,kept,Colab T4; fp32; epoch 4 overfit",,,,,,,,,
+"ESSAY-002,2024-XX-XX,deberta-v3-base,stage2,5-fold CV fold 2,fp16 3 epochs T4,—,QWK=0.8072,kept,Colab T4; fp16",,,,,,,,,
+"ESSAY-003,2024-XX-XX,deberta-v3-base,stage2,5-fold CV fold 3,fp16 3 epochs T4,—,QWK=0.7904,kept,Colab T4; fp16",,,,,,,,,
+"ESSAY-004,2024-XX-XX,deberta-v3-base,stage2,5-fold CV fold 4,fp16 3 epochs local GPU,—,QWK=0.7915,kept,Local GPU",,,,,,,,,
+"ESSAY-005,2024-XX-XX,deberta-v3-base,stage2,5-fold CV fold 5,fp16 3 epochs local GPU,—,QWK=0.8091,kept,OOF combined 0.7926",,,,,,,,,
