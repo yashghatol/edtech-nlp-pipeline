@@ -44,12 +44,14 @@ device = torch.device("cpu")
 # ── Cached model loaders ───────────────────────────────────────────────────────
 @st.cache_resource
 def get_pii_model():
-    return load_pii_model("outputs/models/pii", cfg, device)
+    """Load PII model from HF Hub once and cache for the lifetime of the app session."""
+    return load_pii_model("yashghatol/edtech-pii-model", cfg, device)
 
 
 @st.cache_resource
 def get_essay_model():
-    return load_essay_model("outputs/models/essay/fold_1", device)
+    """Load essay scorer (fold 1) from HF Hub once and cache for the lifetime of the app session."""
+    return load_essay_model("yashghatol/edtech-essay-model", device)
 
 
 # ── Helper: render essay text with PII spans highlighted ───────────────────────
