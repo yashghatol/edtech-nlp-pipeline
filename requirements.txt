@@ -6,6 +6,6 @@ spacy==3.7.4
 seqeval==1.2.2
 scikit-learn==1.4.2
 sentencepiece
-numpy
+numpy<2.0
 pandas
 textstat==0.7.13
