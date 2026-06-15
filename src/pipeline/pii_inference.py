@@ -1,6 +1,7 @@
 # src/pipeline/pii_inference.py
 """End-to-end PII inference: raw text -> token-level predictions with char offsets."""
-
+import os
+os.environ["HUGGINGFACE_HUB_TOKEN"] = os.environ.get("HF_TOKEN", "")
 import spacy
 import torch
 import numpy as np

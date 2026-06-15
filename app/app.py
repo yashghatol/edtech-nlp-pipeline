@@ -11,7 +11,8 @@ Session state stage machine:
   'score'  -> essay scored 1-6, with gauge, heuristic confidence,
               essay statistics, and LOO sentence-importance cards
 """
-
+import os
+HF_TOKEN = os.environ.get("HF_TOKEN")
 import os
 import sys
 import html as html_lib
@@ -181,204 +182,208 @@ st.markdown(
 )
 st.divider()
 
-# ── Session state initialisation ───────────────────────────────────────────────
-if 'stage' not in st.session_state:
-    st.session_state.stage = 'input'
+content = st.empty()
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Stage 1 — Essay input
-# ══════════════════════════════════════════════════════════════════════════════
-if st.session_state.stage == 'input':
-    essay = st.text_area(
-        "Paste your essay here:",
-        height=300,
-        placeholder="Start typing or paste your essay..."
-    )
-    if st.button("🔍 Detect PII", type="primary") and essay.strip():
-        with st.spinner("Detecting PII — this may take a moment on first run..."):
-            pii_model, pii_tok = get_pii_model()
-            preds = run_pii_inference(essay, pii_model, pii_tok, cfg, device)
-        st.session_state.essay = essay
-        st.session_state.preds = preds
-        st.session_state.stage = 'review'
-        st.rerun()
+with content.container():
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Stage 2 — PII review: show what gets redacted, choose auto-redact or edit
-# ══════════════════════════════════════════════════════════════════════════════
-elif st.session_state.stage == 'review':
-    essay   = st.session_state.essay
-    preds   = st.session_state.preds
-    flagged = [i for i, p in enumerate(preds) if p['label'] != 'O']
+            # ── Session state initialisation ───────────────────────────────────────────────
+            if 'stage' not in st.session_state:
+                st.session_state.stage = 'input'
 
-    st.subheader("Step 2 — Review Detected PII")
+            # ══════════════════════════════════════════════════════════════════════════════
+            # Stage 1 — Essay input
+            # ══════════════════════════════════════════════════════════════════════════════
+            if st.session_state.stage == 'input':
+                essay = st.text_area(
+                    "Paste your essay here:",
+                    height=300,
+                    placeholder="Start typing or paste your essay..."
+                )
+                if st.button("🔍 Detect PII", type="primary") and essay.strip():
+                    with st.spinner("Detecting PII — this may take a moment on first run..."):
+                        pii_model, pii_tok = get_pii_model()
+                        preds = run_pii_inference(essay, pii_model, pii_tok, cfg, device)
+                    st.session_state.essay = essay
+                    st.session_state.preds = preds
+                    st.session_state.stage = 'review'
+                    st.rerun()
 
-    if not flagged:
-        st.success("No PII detected.")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📊 Continue to Scoring", type="primary"):
-                st.session_state.redacted_text = essay
-                st.session_state.n_redacted    = 0
-                st.session_state.pii_skipped   = False
-                st.session_state.stage         = 'score'
-                st.rerun()
-        with col2:
-            if st.button("✏️ Edit Essay Manually"):
-                st.session_state.stage = 'edit'
-                st.rerun()
-        st.stop()
+            # ══════════════════════════════════════════════════════════════════════════════
+            # Stage 2 — PII review: show what gets redacted, choose auto-redact or edit
+            # ══════════════════════════════════════════════════════════════════════════════
+            elif st.session_state.stage == 'review':
+                essay   = st.session_state.essay
+                preds   = st.session_state.preds
+                flagged = [i for i, p in enumerate(preds) if p['label'] != 'O']
 
-    st.write(f"Found **{len(flagged)}** PII token(s). Highlighted below — uncheck any you don't want redacted:")
+                st.subheader("Step 2 — Review Detected PII")
 
-    st.markdown(
-        f"<div style='border:1px solid rgba(150,150,150,0.3); border-radius:6px; "
-        f"padding:12px; margin-bottom:12px; line-height:1.6;'>"
-        f"{render_highlighted_text(essay, preds, flagged)}</div>",
-        unsafe_allow_html=True
-    )
+                if not flagged:
+                    st.success("No PII detected.")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("📊 Continue to Scoring", type="primary"):
+                            st.session_state.redacted_text = essay
+                            st.session_state.n_redacted    = 0
+                            st.session_state.pii_skipped   = False
+                            st.session_state.stage         = 'score'
+                            st.rerun()
+                    with col2:
+                        if st.button("✏️ Edit Essay Manually"):
+                            st.session_state.stage = 'edit'
+                            st.rerun()
+                    st.stop()
 
-    redact_choices = {}
-    for i in flagged:
-        p     = preds[i]
-        label = p['label'].replace('B-', '').replace('I-', '')
-        redact_choices[i] = st.checkbox(
-            f"**{p['token']}** — {label}",
-            value=True,
-            key=f"redact_{i}"
-        )
+                st.write(f"Found **{len(flagged)}** PII token(s). Highlighted below — uncheck any you don't want redacted:")
 
-    n_selected = sum(redact_choices.values())
-    redact_pct = n_selected / max(len(flagged), 1)
-    st.caption(f"Redacting {n_selected} / {len(flagged)} flagged tokens ({redact_pct:.0%})")
+                st.markdown(
+                    f"<div style='border:1px solid rgba(150,150,150,0.3); border-radius:6px; "
+                    f"padding:12px; margin-bottom:12px; line-height:1.6;'>"
+                    f"{render_highlighted_text(essay, preds, flagged)}</div>",
+                    unsafe_allow_html=True
+                )
 
-    st.markdown("**What would you like to do?**")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("← Back"):
-            st.session_state.stage = 'input'
-            st.rerun()
-    with col2:
-        if st.button("✏️ Edit Essay Manually"):
-            st.session_state.stage = 'edit'
-            st.rerun()
-    with col3:
-        if st.button("🔒 Redact Automatically & Score →", type="primary"):
-            chosen   = {i for i, v in redact_choices.items() if v}
-            redacted = apply_redactions(essay, preds, chosen)
-            st.session_state.redacted_text = redacted
-            st.session_state.n_redacted    = len(chosen)
-            st.session_state.pii_skipped   = False
-            st.session_state.stage         = 'score'
-            st.rerun()
+                redact_choices = {}
+                for i in flagged:
+                    p     = preds[i]
+                    label = p['label'].replace('B-', '').replace('I-', '')
+                    redact_choices[i] = st.checkbox(
+                        f"**{p['token']}** — {label}",
+                        value=True,
+                        key=f"redact_{i}"
+                    )
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Stage 2b — Manual edit
-# ══════════════════════════════════════════════════════════════════════════════
-elif st.session_state.stage == 'edit':
-    st.subheader("Step 2 — Edit Your Essay")
-    st.caption("Make any changes you'd like — remove or rewrite flagged personal information yourself.")
+                n_selected = sum(redact_choices.values())
+                redact_pct = n_selected / max(len(flagged), 1)
+                st.caption(f"Redacting {n_selected} / {len(flagged)} flagged tokens ({redact_pct:.0%})")
 
-    edited = st.text_area(
-        "Edit essay text:",
-        value=st.session_state.essay,
-        height=300,
-        key="edited_essay"
-    )
+                st.markdown("**What would you like to do?**")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("← Back"):
+                        st.session_state.stage = 'input'
+                        st.rerun()
+                with col2:
+                    if st.button("✏️ Edit Essay Manually"):
+                        st.session_state.stage = 'edit'
+                        st.rerun()
+                with col3:
+                    if st.button("🔒 Redact Automatically & Score →", type="primary"):
+                        chosen   = {i for i, v in redact_choices.items() if v}
+                        redacted = apply_redactions(essay, preds, chosen)
+                        st.session_state.redacted_text = redacted
+                        st.session_state.n_redacted    = len(chosen)
+                        st.session_state.pii_skipped   = False
+                        st.session_state.stage         = 'score'
+                        st.rerun()
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("← Back to Review"):
-            st.session_state.stage = 'review'
-            st.rerun()
-    with col2:
-        if st.button("🔍 Re-run PII Detection"):
-            with st.spinner("Re-running PII detection..."):
-                pii_model, pii_tok = get_pii_model()
-                preds = run_pii_inference(edited, pii_model, pii_tok, cfg, device)
-            st.session_state.essay = edited
-            st.session_state.preds = preds
-            st.session_state.stage = 'review'
-            st.rerun()
-    with col3:
-        if st.button("📊 Score This Essay →", type="primary"):
-            st.session_state.essay         = edited
-            st.session_state.redacted_text = edited
-            st.session_state.n_redacted    = 0
-            st.session_state.pii_skipped   = True
-            st.session_state.stage         = 'score'
-            st.rerun()
+            # ══════════════════════════════════════════════════════════════════════════════
+            # Stage 2b — Manual edit
+            # ══════════════════════════════════════════════════════════════════════════════
+            elif st.session_state.stage == 'edit':
+                st.subheader("Step 2 — Edit Your Essay")
+                st.caption("Make any changes you'd like — remove or rewrite flagged personal information yourself.")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Stage 3 — Essay scoring + gauge + confidence + stats + LOO heatmap
-# ══════════════════════════════════════════════════════════════════════════════
-elif st.session_state.stage == 'score':
-    redacted = st.session_state.redacted_text
+                edited = st.text_area(
+                    "Edit essay text:",
+                    value=st.session_state.essay,
+                    height=300,
+                    key="edited_essay"
+                )
 
-    st.subheader("Step 3 — Essay Score")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button("← Back to Review"):
+                        st.session_state.stage = 'review'
+                        st.rerun()
+                with col2:
+                    if st.button("🔍 Re-run PII Detection"):
+                        with st.spinner("Re-running PII detection..."):
+                            pii_model, pii_tok = get_pii_model()
+                            preds = run_pii_inference(edited, pii_model, pii_tok, cfg, device)
+                        st.session_state.essay = edited
+                        st.session_state.preds = preds
+                        st.session_state.stage = 'review'
+                        st.rerun()
+                with col3:
+                    if st.button("📊 Score This Essay →", type="primary"):
+                        st.session_state.essay         = edited
+                        st.session_state.redacted_text = edited
+                        st.session_state.n_redacted    = 0
+                        st.session_state.pii_skipped   = True
+                        st.session_state.stage         = 'score'
+                        st.rerun()
 
-    with st.spinner("Scoring essay and computing sentence importance..."):
-        essay_model, essay_tok = get_essay_model()
-        base_score, importances = compute_loo_importance(
-            redacted,
-            essay_model,
-            essay_tok,
-            device,
-            max_length=cfg['stage2']['max_length']
-        )
+            # ══════════════════════════════════════════════════════════════════════════════
+            # Stage 3 — Essay scoring + gauge + confidence + stats + LOO heatmap
+            # ══════════════════════════════════════════════════════════════════════════════
+            elif st.session_state.stage == 'score':
+                redacted = st.session_state.redacted_text
 
-    final_score = int(np.clip(np.round(base_score), 1, 6))
+                st.subheader("Step 3 — Essay Score")
 
-    # --- Score gauge + stars ---
-    st.markdown(render_score_gauge(final_score), unsafe_allow_html=True)
-    st.caption(f"Raw model output: {base_score:.3f}")
+                with st.spinner("Scoring essay and computing sentence importance..."):
+                    essay_model, essay_tok = get_essay_model()
+                    base_score, importances = compute_loo_importance(
+                        redacted,
+                        essay_model,
+                        essay_tok,
+                        device,
+                        max_length=cfg['stage2']['max_length']
+                    )
 
-    # --- Heuristic confidence + possible range ---
-    frac_dist  = abs(base_score - round(base_score))     # 0 (confident) .. 0.5 (uncertain)
-    confidence = max(0.0, 1 - 2 * frac_dist)
-    if base_score >= final_score:
-        range_low, range_high = final_score, min(final_score + 1, 6)
-    else:
-        range_low, range_high = max(final_score - 1, 1), final_score
+                final_score = int(np.clip(np.round(base_score), 1, 6))
 
-    col1, col2 = st.columns(2)
-    col1.metric("Confidence", f"{confidence:.0%}")
-    col2.metric("Possible Range", f"{range_low}–{range_high}")
-    st.caption(
-        "ℹ️ Confidence and range are a heuristic derived from how close the raw "
-        "model output is to the nearest integer score — not a calibrated probability."
-    )
+                # --- Score gauge + stars ---
+                st.markdown(render_score_gauge(final_score), unsafe_allow_html=True)
+                st.caption(f"Raw model output: {base_score:.3f}")
 
-    st.divider()
+                # --- Heuristic confidence + possible range ---
+                frac_dist  = abs(base_score - round(base_score))     # 0 (confident) .. 0.5 (uncertain)
+                confidence = max(0.0, 1 - 2 * frac_dist)
+                if base_score >= final_score:
+                    range_low, range_high = final_score, min(final_score + 1, 6)
+                else:
+                    range_low, range_high = max(final_score - 1, 1), final_score
 
-    # --- Essay statistics panel ---
-    render_essay_stats(
-        redacted,
-        st.session_state.get('n_redacted', 0),
-        st.session_state.get('pii_skipped', False)
-    )
+                col1, col2 = st.columns(2)
+                col1.metric("Confidence", f"{confidence:.0%}")
+                col2.metric("Possible Range", f"{range_low}–{range_high}")
+                st.caption(
+                    "ℹ️ Confidence and range are a heuristic derived from how close the raw "
+                    "model output is to the nearest integer score — not a calibrated probability."
+                )
 
-    st.divider()
+                st.divider()
 
-    # --- Sentence importance cards ---
-    st.subheader("Sentence Importance (Leave-One-Out)")
-    st.caption(
-        "▲ Green = sentence raises the score  |  "
-        "▼ Red = sentence lowers the score  |  "
-        "■ Grey = neutral"
-    )
-    for row in importances:
-        st.markdown(render_sentence_card(row['sentence'], row['importance']), unsafe_allow_html=True)
+                # --- Essay statistics panel ---
+                render_essay_stats(
+                    redacted,
+                    st.session_state.get('n_redacted', 0),
+                    st.session_state.get('pii_skipped', False)
+                )
 
-    st.divider()
-    st.caption(
-        "⚠️ **Known limitation:** The essay scorer was trained on unredacted essays. "
-        "Scoring a redacted or manually-edited essay introduces a minor distribution shift — "
-        "treat scores as approximate."
-    )
+                st.divider()
 
-    if st.button("📝 Score another essay"):
-        for key in ('essay', 'preds', 'redacted_text', 'n_redacted', 'pii_skipped'):
-            st.session_state.pop(key, None)
-        st.session_state.stage = 'input'
-        st.rerun()
+                # --- Sentence importance cards ---
+                st.subheader("Sentence Importance (Leave-One-Out)")
+                st.caption(
+                    "▲ Green = sentence raises the score  |  "
+                    "▼ Red = sentence lowers the score  |  "
+                    "■ Grey = neutral"
+                )
+                for row in importances:
+                    st.markdown(render_sentence_card(row['sentence'], row['importance']), unsafe_allow_html=True)
+
+                st.divider()
+                st.caption(
+                    "⚠️ **Known limitation:** The essay scorer was trained on unredacted essays. "
+                    "Scoring a redacted or manually-edited essay introduces a minor distribution shift — "
+                    "treat scores as approximate."
+                )
+
+                if st.button("📝 Score another essay"):
+                    for key in ('essay', 'preds', 'redacted_text', 'n_redacted', 'pii_skipped'):
+                        st.session_state.pop(key, None)
+                    st.session_state.stage = 'input'
+                    st.rerun()
