@@ -1,6 +1,6 @@
 # src/pipeline/essay_inference.py
 """End-to-end essay scoring: redacted text -> 1-6 score + LOO sentence importance."""
-
+from src.utils.hub_utils import resolve_model_file
 import spacy
 import torch
 import numpy as np
@@ -24,9 +24,9 @@ def load_essay_model(fold_dir: str, device: torch.device):
     model = EssayScorer(fold_dir).to(device).eval()
     model.regressor.load_state_dict(
         torch.load(
-            f"{fold_dir}/regressor_head.pt",
+            resolve_model_file(fold_dir, "regressor_head.pt"),
             map_location=device,
-            weights_only=True    # suppress FutureWarning in PyTorch >= 2.0
+            weights_only=True
         )
     )
     tokenizer = AutoTokenizer.from_pretrained(fold_dir, use_fast=True)

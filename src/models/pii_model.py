@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 from transformers import AutoModel
-
+from src.utils.hub_utils import resolve_model_file
 
 class PIITokenClassifier(nn.Module):
     """DeBERTa-v3-base backbone + per-token linear head for 13-class BIO NER."""
@@ -54,6 +54,6 @@ class PIITokenClassifier(nn.Module):
         """
         model = cls(model_dir, num_labels, dropout)
         model.classifier.load_state_dict(
-            torch.load(f"{model_dir}/classifier_head.pt", map_location="cpu")
+            torch.load(resolve_model_file(model_dir, "classifier_head.pt"), map_location=...)
         )
         return model
