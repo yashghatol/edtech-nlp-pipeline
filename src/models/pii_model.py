@@ -54,6 +54,6 @@ class PIITokenClassifier(nn.Module):
         """
         model = cls(model_dir, num_labels, dropout)
         model.classifier.load_state_dict(
-            torch.load(resolve_model_file(model_dir, "classifier_head.pt"), map_location=...)
+            torch.load(resolve_model_file(model_dir, "classifier_head.pt"), map_location="cpu")
         )
         return model
