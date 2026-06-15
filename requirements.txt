@@ -4,8 +4,8 @@ huggingface_hub==0.24.6
 streamlit>=1.30.0
 spacy==3.7.4
 seqeval==1.2.2
-scikit-learn==1.4.1
+scikit-learn==1.4.2
 sentencepiece
-numpy==1.26.4
+numpy
 pandas
 textstat==0.7.13
